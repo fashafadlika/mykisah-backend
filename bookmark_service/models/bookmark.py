@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, DateTime, func
-from core.database import Base
+from database import Base
 
 # Model ORM untuk tabel `bookmarks` — menyimpan relasi user_id & story_id yang di-bookmark.
 class Bookmark(Base):

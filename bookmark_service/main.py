@@ -5,8 +5,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from api.routes.bookmarks import router as bookmarks_router
+from database import Base, engine
+from routes.bookmarks import router as bookmarks_router
 from schemas.base import ErrorResponse
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="MyKisah - Bookmark Service")
 
@@ -33,7 +36,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
         message=str(exc.detail),
         errors=None
     ).model_dump()
-    
+
     return JSONResponse(
         status_code=exc.status_code,
         content=response_content
@@ -52,12 +55,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": err["msg"],
             "type": err["type"]
         })
-        
+
     response_content = ErrorResponse(
         message="Request validation failed.",
         errors=errors
     ).model_dump()
-    
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=response_content
@@ -74,7 +77,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         message="Terjadi kesalahan internal server.",
         errors=str(exc)
     ).model_dump()
-    
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=response_content
