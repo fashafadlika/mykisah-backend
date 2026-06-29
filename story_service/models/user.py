@@ -13,7 +13,7 @@ class User(Base):
     username = Column(String(100), unique=True, nullable=False)
     avatar_url = Column(String(255), nullable=True)
     bio = Column(String(255), nullable=True)
-    role = Column(String(20), nullable=False, default="user")  # enum(admin, user)
+    role = Column(String(20), nullable=False, default="user") 
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime)
     updated_at = Column(DateTime)
