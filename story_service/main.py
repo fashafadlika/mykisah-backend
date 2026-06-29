@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 from routes import stories
 from routes import genres
+from search_service.search_routes import router as search_router
 
 Base.metadata.create_all(bind=engine)
 
@@ -20,6 +21,7 @@ app.add_middleware(
 
 app.include_router(stories.router)
 app.include_router(genres.router)
+app.include_router(search_router)
 
 @app.get("/")
 def root():
