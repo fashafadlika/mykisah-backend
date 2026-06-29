@@ -18,11 +18,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from routes import chapters
 
 app.include_router(stories.router)
 app.include_router(genres.router)
+app.include_router(chapters.router)
 app.include_router(search_router)
-
 @app.get("/")
 def root():
     return {"message": "Story Service is running"}

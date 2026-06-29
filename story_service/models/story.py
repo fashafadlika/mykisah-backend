@@ -28,3 +28,4 @@ class Story(Base):
 
     # Relationships
     genres = relationship("Genre", secondary="story_genres", back_populates="stories")
+    chapters = relationship("Chapter", back_populates="story", cascade="all, delete-orphan", order_by="Chapter.chapter_number")
