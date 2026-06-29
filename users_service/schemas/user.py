@@ -43,3 +43,14 @@ class TokenResponse(BaseModel):
 
 class ResendOTP(BaseModel):
     email: EmailStr
+
+
+# schemas/user.py — tambahkan di bawah UserResponse
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+
+    class Config:
+        from_attributes = True
