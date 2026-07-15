@@ -30,11 +30,12 @@ class UserResponse(BaseModel):
     username: str
     birthdate: Optional[date] = None
     bio: Optional[str] = None
-    profile_picture: Optional[str] = None
+    avatar_url: Optional[str] = None
     role: str
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class TokenResponse(BaseModel):
