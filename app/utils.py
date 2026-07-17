@@ -1,5 +1,14 @@
+import os
 import smtplib
+import jwt
 from email.message import EmailMessage
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 # Ganti dengan email dan App Password milikmu
 SENDER_EMAIL = "auth.mykisah@gmail.com" 
@@ -29,3 +38,14 @@ def send_otp_email(recipient_email: str, otp_code: str):
             server.send_message(msg)
     except Exception as e:
         print(f"Gagal mengirim email: {e}")
+
+def create_access_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15) # Default 15 menit
+        
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt

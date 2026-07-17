@@ -3,11 +3,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime, date, timedelta 
-
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 from passlib.context import CryptContext
+from app.utils import send_otp_email, create_access_token
 
 
 from app.utils import send_otp_email 
@@ -31,6 +31,10 @@ class VerifyOTPSchema(BaseModel):
 
 class ResendOTPSchema(BaseModel):
     email: EmailStr
+
+class UserLoginSchema(BaseModel):
+    email: EmailStr
+    password: str
 
 @router.post("/verify-otp", status_code=status.HTTP_200_OK)
 def verify_otp(data: VerifyOTPSchema, db: Session = Depends(get_db)):
@@ -201,4 +205,41 @@ def register_user(
             "email": new_user.email,
             "birthdate": str(new_user.birthdate) if new_user.birthdate else None
         }
+    }
+
+@router.post("/login", status_code=status.HTTP_200_OK)
+def login_user(data: UserLoginSchema, db: Session = Depends(get_db)):
+    # Cari user berdasarkan email
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email atau password salah!"
+        )
+
+    # Cek verifikasi password brypt
+    if not pwd_context.verify(data.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email atau password salah!"
+        )
+
+    # KEAMANAN UTAMA: Blokir user jika belum verifikasi OTP
+    if not user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Akun Anda belum diverifikasi! Silakan verifikasi OTP terlebih dahulu."
+        )
+
+    # Buat JWT Token (berlaku misalnya 1 hari)
+    access_token_expires = timedelta(days=1)
+    access_token = create_access_token(
+        data={"sub": str(user.id), "email": user.email}, 
+        expires_delta=access_token_expires
+    )
+
+    return {
+        "success": True,
+        "access_token": access_token,
+        "token_type": "bearer"
     }
