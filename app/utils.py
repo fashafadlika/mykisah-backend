@@ -2,8 +2,8 @@ import smtplib
 from email.message import EmailMessage
 
 # Ganti dengan email dan App Password milikmu
-SENDER_EMAIL = "email.kamu@gmail.com" 
-SENDER_PASSWORD = "passwordaplikasigmailkamu" # 16 digit huruf acak tanpa spasi
+SENDER_EMAIL = "auth.mykisah@gmail.com" 
+SENDER_PASSWORD = "hdya voyv yrag hpjz" # 16 digit huruf acak tanpa spasi
 
 def send_otp_email(recipient_email: str, otp_code: str):
     msg = EmailMessage()

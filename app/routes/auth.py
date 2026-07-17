@@ -25,6 +25,102 @@ class UserRegisterSchema(BaseModel):
     password: str
     birthdate: Optional[str] = None
 
+class VerifyOTPSchema(BaseModel):
+    email: EmailStr
+    otp_code: str
+
+class ResendOTPSchema(BaseModel):
+    email: EmailStr
+
+@router.post("/verify-otp", status_code=status.HTTP_200_OK)
+def verify_otp(data: VerifyOTPSchema, db: Session = Depends(get_db)):
+    # 1. Cari user berdasarkan email
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pengguna tidak ditemukan!"
+        )
+
+    # 2. Cek apakah akun sudah terverifikasi sebelumnya
+    if user.is_verified:
+        return {"success": True, "message": "Akun sudah terverifikasi sebelumnya."}
+
+    # 3. Cek kecocokan kode OTP
+    if user.otp_code != data.otp_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP salah!"
+        )
+
+    # 4. Cek apakah OTP sudah kedaluwarsa
+    if user.otp_expired_at < datetime.now():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP sudah kedaluwarsa! Silakan minta kode baru."
+        )
+
+    # 5. Jika semua cek lolos, ubah status verifikasi menjadi True
+    try:
+        user.is_verified = True
+        user.otp_code = None        
+        user.otp_expired_at = None  
+        
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gagal memverifikasi akun."
+        )
+
+    return {
+        "success": True,
+        "message": "Verifikasi berhasil! Akun Anda sudah aktif."
+    }
+
+@router.post("/resend-otp", status_code=status.HTTP_200_OK)
+def resend_otp(
+    data: ResendOTPSchema, 
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db)
+):
+    # 1. Cari user berdasarkan email
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email tidak ditemukan!"
+        )
+
+    # 2. Cek apakah user sebenarnya sudah terverifikasi
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Akun ini sudah terverifikasi. Silakan langsung login."
+        )
+
+    # 3. Generate ulang kode OTP baru & perbarui waktu kedaluwarsa (5 menit lagi)
+    new_otp = str(random.randint(100000, 999999))
+    user.otp_code = new_otp
+    user.otp_expired_at = datetime.now() + timedelta(minutes=5)
+
+    try:
+        db.commit()
+        # 4. Kirim ulang email di background task
+        background_tasks.add_task(send_otp_email, user.email, new_otp)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gagal mengirim ulang OTP."
+        )
+
+    return {
+        "success": True,
+        "message": "Kode OTP baru telah dikirim ke email Anda."
+    }
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register_user(
     data: UserRegisterSchema, 
