@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, Date, Text, Boolean, Enum, TIMESTAMP
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.database import Base
+
 import enum
 
 
@@ -25,3 +27,4 @@ class User(Base):
     role = Column(Enum(RoleEnum), nullable=False, default=RoleEnum.user)
     created_at = Column(TIMESTAMP, server_default=func.now())
     updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    bookmarks = relationship("Bookmark", back_populates="user", cascade="all, delete-orphan")

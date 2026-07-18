@@ -1,96 +1,62 @@
-# Routes untuk endpoint bookmark — query DB, validasi bisnis, dan response langsung di sini.
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
-
-from app.database import get_db
-from app.models.bookmark import Bookmark
-from app.schemas.bookmark import BookmarkCreate, BookmarkResponse, SuccessResponse
+from app.database import get_db 
+from app.models.bookmark import Bookmark 
+from app.schemas.bookmark import BookmarkCreate, BookmarkResponse 
 
 router = APIRouter(
     prefix="/bookmarks",
-    tags=["bookmarks"]
+    tags=["Bookmarks"]
 )
 
-@router.post("/", response_model=SuccessResponse[BookmarkResponse], status_code=status.HTTP_201_CREATED)
-def add_bookmark(bookmark_in: BookmarkCreate, db: Session = Depends(get_db)):
+@router.post("/", response_model=BookmarkResponse, status_code=status.HTTP_201_CREATED)
+def add_bookmark(bookmark: BookmarkCreate, db: Session = Depends(get_db)):
     """
-    Menambahkan bookmark baru untuk seorang user.
+    Endpoint untuk menambah bookmark baru.
+    Mencegah duplikasi jika user mem-bookmark story yang sama.
     """
-    # Business logic: Cek apakah bookmark sudah ada
-    existing = db.query(Bookmark).filter(
-        Bookmark.user_id == bookmark_in.user_id,
-        Bookmark.story_id == bookmark_in.story_id
+    # 1. Validasi apakah bookmark sudah ada
+    existing_bookmark = db.query(Bookmark).filter(
+        Bookmark.user_id == bookmark.user_id,
+        Bookmark.story_id == bookmark.story_id
     ).first()
-    if existing:
+    
+    if existing_bookmark:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Story sudah ditambahkan ke bookmarks sebelumnya."
+            detail="Story ini sudah ada di dalam bookmark Anda."
         )
-
-    db_bookmark = Bookmark(user_id=bookmark_in.user_id, story_id=bookmark_in.story_id)
+    
+    # 2. Buat bookmark baru
+    db_bookmark = Bookmark(**bookmark.model_dump())
     db.add(db_bookmark)
     db.commit()
     db.refresh(db_bookmark)
+    return db_bookmark
 
-    return SuccessResponse(
-        message="Bookmark berhasil ditambahkan.",
-        data=BookmarkResponse.model_validate(db_bookmark)
-    )
 
-@router.get("/user/{user_id}", response_model=SuccessResponse[List[BookmarkResponse]])
-def get_user_bookmarks(
-    user_id: int,
-    skip: int = Query(0, ge=0),
-    limit: int = Query(20, ge=1, le=100),
-    db: Session = Depends(get_db)
-):
+@router.delete("/{bookmark_id}", status_code=status.HTTP_200_OK)
+def remove_bookmark(bookmark_id: int, db: Session = Depends(get_db)):
     """
-    Mengambil daftar bookmark milik user (biasanya untuk Profile Page GridCard).
+    Endpoint untuk menghapus bookmark berdasarkan ID Bookmark.
     """
-    bookmarks = (
-        db.query(Bookmark)
-        .filter(Bookmark.user_id == user_id)
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
-
-    data_response = [BookmarkResponse.model_validate(b) for b in bookmarks]
-
-    return SuccessResponse(
-        message="Daftar bookmark berhasil diambil.",
-        data=data_response
-    )
-
-@router.delete("/{bookmark_id}", response_model=SuccessResponse[None])
-def remove_bookmark(
-    bookmark_id: int,
-    user_id: int = Query(..., description="ID user yang menghapus bookmark (untuk validasi kepemilikan)"),
-    db: Session = Depends(get_db)
-):
-    """
-    Menghapus bookmark berdasarkan ID bookmark dan validasi kepemilikan user.
-    """
-    # Business logic: Cek apakah bookmark ada
-    bookmark = db.query(Bookmark).filter(Bookmark.id == bookmark_id).first()
-    if not bookmark:
+    db_bookmark = db.query(Bookmark).filter(Bookmark.id == bookmark_id).first()
+    if not db_bookmark:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Bookmark tidak ditemukan."
         )
-
-    # Business logic: Cek kepemilikan bookmark (Authorization)
-    if bookmark.user_id != user_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Anda tidak memiliki akses untuk menghapus bookmark ini."
-        )
-
-    db.delete(bookmark)
+    
+    db.delete(db_bookmark)
     db.commit()
+    return {"status": "success", "message": "Bookmark berhasil dihapus."}
 
-    return SuccessResponse(
-        message="Bookmark berhasil dihapus.",
-        data=None
-    )
+
+@router.get("/user/{user_id}", response_model=List[BookmarkResponse])
+def get_user_bookmarks(user_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint untuk mengambil seluruh daftar bookmark milik user tertentu.
+    """
+    bookmarks = db.query(Bookmark).filter(Bookmark.user_id == user_id).all()
+    return bookmarks
