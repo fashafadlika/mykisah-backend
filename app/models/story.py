@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Enum
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.database import Base 
 
 class Story(Base):
@@ -13,11 +13,12 @@ class Story(Base):
     cover_url = Column(String(255))
     status = Column(Enum('draft', 'pending', 'published', 'rejected', name="story_status_enum"), default='draft')
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.utcnow)
 
     chapters = relationship("Chapter", back_populates="story")
     views = relationship("StoryView", back_populates="story")
+    bookmarks = relationship("Bookmark", back_populates="story", cascade="all, delete-orphan")
 
 class Chapter(Base):
     __tablename__ = "chapters"
@@ -28,8 +29,8 @@ class Chapter(Base):
     content = Column(Text, nullable=False)
     chapter_number = Column(Integer, nullable=False)
     
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     story = relationship("Story", back_populates="chapters")
 
@@ -39,6 +40,6 @@ class StoryView(Base):
     id = Column(Integer, primary_key=True, index=True)
     story_id = Column(Integer, ForeignKey("stories.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
-    viewed_at = Column(DateTime, default=datetime.utcnow)
+    viewed_at = Column(DateTime, default=datetime.now(timezone.utc))
 
     story = relationship("Story", back_populates="views")
