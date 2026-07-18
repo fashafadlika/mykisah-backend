@@ -3,10 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from database import get_db
-from models.bookmark import Bookmark
-from schemas.bookmark import BookmarkCreate, BookmarkResponse
-from schemas.base import SuccessResponse
+from app.database import get_db
+from app.models.bookmark import Bookmark
+from app.schemas.bookmark import BookmarkCreate, BookmarkResponse, SuccessResponse
 
 router = APIRouter(
     prefix="/bookmarks",
