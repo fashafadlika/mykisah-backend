@@ -1,8 +1,15 @@
 from fastapi import APIRouter, Depends
 from app.dependencies import get_current_user
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = APIRouter()
 
-@router.get("/me")
-def read_users_me(current_user: dict = Depends(get_current_user)):
-    return {"message": "Ini adalah data rahasia", "user": current_user}
+@router.get("/users/me")
+def read_users_me(current_user = Depends(get_current_user)):
+    # Sekarang current_user adalah objek model User
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "bio": current_user.bio,
+        "avatar_url": current_user.profile_picture # Mapping kolom DB ke JSON API
+    }
