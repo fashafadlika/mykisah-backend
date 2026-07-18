@@ -21,6 +21,8 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(user.router)
+app.include_router(notification.router)
+app.include_router(reading_progres.router)
 app.include_router(story.router)
 app.include_router(bookmark.router)
 
