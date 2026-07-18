@@ -24,3 +24,10 @@ class BookmarkResponse(BookmarkBase):
 
     class Config:
         from_attributes = True  
+
+class BookmarkCreateResponse(BookmarkBase):
+    id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

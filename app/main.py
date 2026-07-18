@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routes import user, auth, story, bookmark, notification, reading_progres, genres, submission, admin_review
 from app.database import engine, Base
 from app.models.bookmark import Bookmark
-from app.models.story import Story, Chapter, StoryView 
+from app.models.story import Story, Chapter, StoryView
+from app.models.user import User 
 
 Base.metadata.create_all(bind=engine)
 

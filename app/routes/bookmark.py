@@ -3,32 +3,37 @@ from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.database import get_db 
 from app.models.bookmark import Bookmark 
-from app.schemas.bookmark import BookmarkCreate, BookmarkResponse 
+from app.schemas.bookmark import BookmarkCreate, BookmarkResponse, BookmarkCreateResponse
+from app.models.user import User
+from app.models.story import Story
 
 router = APIRouter(
     prefix="/bookmarks",
     tags=["Bookmarks"]
 )
 
-@router.post("/", response_model=BookmarkResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=BookmarkCreateResponse, status_code=status.HTTP_201_CREATED)
 def add_bookmark(bookmark: BookmarkCreate, db: Session = Depends(get_db)):
-    """
-    Endpoint untuk menambah bookmark baru.
-    Mencegah duplikasi jika user mem-bookmark story yang sama.
-    """
-    # 1. Validasi apakah bookmark sudah ada
+    # 1. Cek apakah User ada
+    user_exists = db.query(User).filter(User.id == bookmark.user_id).first()
+    if not user_exists:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan.")
+
+    # 2. Cek apakah Story ada
+    story_exists = db.query(Story).filter(Story.id == bookmark.story_id).first()
+    if not story_exists:
+        raise HTTPException(status_code=404, detail="Novel tidak ditemukan.")
+
+    # 3. Validasi duplikasi (kode lama Anda)
     existing_bookmark = db.query(Bookmark).filter(
         Bookmark.user_id == bookmark.user_id,
         Bookmark.story_id == bookmark.story_id
     ).first()
     
     if existing_bookmark:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Story ini sudah ada di dalam bookmark Anda."
-        )
+        raise HTTPException(status_code=400, detail="Story ini sudah ada di dalam bookmark Anda.")
     
-    # 2. Buat bookmark baru
+    # 4. Buat bookmark baru
     db_bookmark = Bookmark(**bookmark.model_dump())
     db.add(db_bookmark)
     db.commit()
