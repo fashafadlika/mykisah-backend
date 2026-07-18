@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import user, auth, story, bookmark, notification, reading_progres, genres
+from app.routes import user, auth, story, bookmark, notification, reading_progres, genres, submission
 from app.database import engine, Base
 from app.models.bookmark import Bookmark
 from app.models.story import Story, Chapter, StoryView
@@ -27,6 +27,7 @@ app.include_router(reading_progres.router)
 app.include_router(story.router)
 app.include_router(bookmark.router)
 app.include_router(genres.router)
+app.include_router(submission.router)
 
 @app.get("/")
 def home():
