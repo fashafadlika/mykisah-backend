@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session # Pastikan kamu punya import ini
 import jwt
 from app.utils import SECRET_KEY, ALGORITHM
 from app.database import get_db  # Sesuaikan dengan path file database kamu
-from app.models import User      # Sesuaikan dengan path model User kamu
+from app.models.user import User
 
 # Definisikan skema OAuth2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
