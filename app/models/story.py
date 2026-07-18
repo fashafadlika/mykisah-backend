@@ -14,7 +14,7 @@ class Story(Base):
     status = Column(Enum('draft', 'pending', 'published', 'rejected', name="story_status_enum"), default='draft')
     
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     chapters = relationship("Chapter", back_populates="story")
     views = relationship("StoryView", back_populates="story")

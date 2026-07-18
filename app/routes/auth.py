@@ -241,5 +241,6 @@ def login_user(data: UserLoginSchema, db: Session = Depends(get_db)):
     return {
         "success": True,
         "access_token": access_token,
-        "token_type": "bearer"
+        "token_type": "bearer",
+        "user_id": user.id
     }

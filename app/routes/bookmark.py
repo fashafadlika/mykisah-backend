@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
 from app.database import get_db 
 from app.models.bookmark import Bookmark 
@@ -58,5 +58,10 @@ def get_user_bookmarks(user_id: int, db: Session = Depends(get_db)):
     """
     Endpoint untuk mengambil seluruh daftar bookmark milik user tertentu.
     """
-    bookmarks = db.query(Bookmark).filter(Bookmark.user_id == user_id).all()
+    bookmarks = (
+        db.query(Bookmark)
+        .options(joinedload(Bookmark.story))
+        .filter(Bookmark.user_id == user_id)
+        .all()
+    )
     return bookmarks
