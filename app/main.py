@@ -1,11 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.routes import user
 from app.routes import auth
 from app.routes import notification
 from app.routes import reading_progres
+from app.routes import story
 from app.database import engine, Base
+from app.models.story import Story, Chapter, StoryView 
+
+
 
 # Import models agar terdaftar ke Base.metadata sebelum create_all
 from app.models.notification import Notification       # noqa: F401
@@ -29,6 +32,7 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(notification.router)
 app.include_router(reading_progres.router)
+app.include_router(story.router)
 
 @app.get("/")
 def home():
