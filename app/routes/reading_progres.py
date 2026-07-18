@@ -7,8 +7,7 @@ from typing import List
 
 from app.database import get_db
 from app.models.reading_progres import ReadingProgress
-from app.schemas.reading_progress import ReadingProgressCreate, ReadingProgressResponse
-from app.schemas.base import SuccessResponse
+from app.schemas.reading_progress import ReadingProgressCreate, ReadingProgressResponse, SuccessResponse
 
 router = APIRouter(
     prefix="/reading-progress",
