@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 
 from app.database import get_db
 from app.models.story import Story, StoryGenre
 from app.models.user import User
+from app.models.notification import Notification
 from app.dependencies import get_current_user
 from app.routes.genres import GENRES
 from app.schemas.submission import SubmissionCreate
@@ -42,20 +43,28 @@ def _serialize_story(story: Story, username: str, db: Session) -> dict:
     }
 
 
-# Cek berapa banyak submission pending milik user, buat batasi spam submit
-def _get_pending_count(db: Session, user_id: int) -> int:
-    return (
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def create_submission(
+    payload: SubmissionCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Cek jumlah submission pending user, batasi biar gak spam submit
+    pending_count = (
         db.query(Story)
-        .filter(Story.user_id == user_id, Story.status == "pending")
+        .filter(Story.user_id == current_user.id, Story.status == "pending")
         .count()
     )
+    if pending_count >= MAX_PENDING_SUBMISSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maksimal {MAX_PENDING_SUBMISSIONS} submission pending dalam antrian!"
+        )
 
-
-# Simpan story baru + relasi genre-nya ke database dalam 1 transaksi
-def _create_story_with_genres(db: Session, user_id: int, payload: SubmissionCreate) -> Story:
+    # 2. Simpan story baru + genre-nya + notifikasi ke admin, dalam 1 transaksi
     try:
         new_story = Story(
-            user_id=user_id,
+            user_id=current_user.id,
             title=payload.title,
             synopsis=payload.synopsis,
             cover_url=payload.cover_url,
@@ -70,43 +79,41 @@ def _create_story_with_genres(db: Session, user_id: int, payload: SubmissionCrea
             for genre_id in payload.genre_ids
         ])
 
+        # Cari semua admin, kirim notifikasi ke masing-masing
+        admins = db.query(User).filter(User.role == "admin").all()
+        db.add_all([
+            Notification(
+                user_id=admin.id,
+                story_id=new_story.id,
+                type="new_submission",
+                message=f"{current_user.username} mengirim novel baru: {new_story.title}",
+                is_read=False,
+            )
+            for admin in admins
+        ])
+
         db.commit()
         db.refresh(new_story)
-        return new_story
-
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail="Gagal menyimpan submission")
-
-
-# Submit novel baru, otomatis status = pending, tunggu review admin
-@router.post("/")
-def create_submission(
-    payload: SubmissionCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    if _get_pending_count(db, current_user.id) >= MAX_PENDING_SUBMISSIONS:
         raise HTTPException(
-            status_code=400,
-            detail=f"Maksimal {MAX_PENDING_SUBMISSIONS} submission pending dalam antrian",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal menyimpan submission: {str(e)}"
         )
-
-    new_story = _create_story_with_genres(db, current_user.id, payload)
 
     return {
         "success": True,
-        "message": "Novel berhasil disubmit, menunggu review admin",
-        "data": _serialize_story(new_story, current_user.username, db),
+        "message": "Novel berhasil disubmit, menunggu review admin.",
+        "data": _serialize_story(new_story, current_user.username, db)
     }
 
 
-# Ambil submission milik user login dengan status pending, buat tab "Pending"
-@router.get("/pending")
+@router.get("/pending", status_code=status.HTTP_200_OK)
 def get_pending_submissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Ambil semua submission milik user yang berstatus pending
     stories = (
         db.query(Story)
         .filter(Story.user_id == current_user.id, Story.status == "pending")
@@ -116,22 +123,22 @@ def get_pending_submissions(
 
     return {
         "success": True,
-        "message": "Berhasil mengambil submission pending",
-        "data": [_serialize_story(s, current_user.username, db) for s in stories],
+        "message": "Berhasil mengambil submission pending.",
+        "data": [_serialize_story(s, current_user.username, db) for s in stories]
     }
 
 
-# Ambil submission milik user login yang sudah diproses (published/rejected), buat tab "History"
-@router.get("/history")
+@router.get("/history", status_code=status.HTTP_200_OK)
 def get_submission_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Ambil semua submission milik user yang sudah diproses (published/rejected)
     stories = (
         db.query(Story)
         .filter(
             Story.user_id == current_user.id,
-            Story.status.in_(["published", "rejected"]),
+            Story.status.in_(["published", "rejected"])
         )
         .order_by(desc(Story.submitted_at))
         .all()
@@ -139,31 +146,33 @@ def get_submission_history(
 
     return {
         "success": True,
-        "message": "Berhasil mengambil riwayat submission",
-        "data": [_serialize_story(s, current_user.username, db) for s in stories],
+        "message": "Berhasil mengambil riwayat submission.",
+        "data": [_serialize_story(s, current_user.username, db) for s in stories]
     }
 
 
 # PENTING: route dinamis ini harus di bawah /pending dan /history,
 # supaya FastAPI gak salah tangkep "pending"/"history" sebagai story_id
-# Ambil detail 1 submission spesifik milik user login, buat tombol "Details Novel"
-@router.get("/{story_id}")
+@router.get("/{story_id}", status_code=status.HTTP_200_OK)
 def get_submission_detail(
     story_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    # Cari submission berdasarkan id, pastikan punya user yang login
     story = (
         db.query(Story)
         .filter(Story.id == story_id, Story.user_id == current_user.id)
         .first()
     )
-
     if not story:
-        raise HTTPException(status_code=404, detail="Submission tidak ditemukan")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission tidak ditemukan!"
+        )
 
     return {
         "success": True,
-        "message": "Detail submission berhasil diambil",
-        "data": _serialize_story(story, current_user.username, db),
+        "message": "Detail submission berhasil diambil.",
+        "data": _serialize_story(story, current_user.username, db)
     }
