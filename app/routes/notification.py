@@ -118,11 +118,18 @@ def create_notification(notification: NotificationCreate, db: Session = Depends(
     return db_notification
 
 @router.put("/{notification_id}/read", response_model=NotificationResponse)
-def mark_as_read(notification_id: int, db: Session = Depends(get_db)):
+def mark_as_read(
+    notification_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Mark a notification as read
     """
-    db_notification = db.query(Notification).filter(Notification.id == notification_id).first()
+    db_notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id
+    ).first()
     if not db_notification:
         raise HTTPException(status_code=404, detail="Notification not found")
     
