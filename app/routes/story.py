@@ -152,3 +152,26 @@ def get_story_detail(story_id: int, db: Session = Depends(get_db)):
             ]
         }
     }
+
+
+@router.get("/{story_id}/chapters")
+def get_story_chapters(story_id: int, db: Session = Depends(get_db)):
+    # Pastikan novel ada
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Novel tidak ditemukan")
+
+    # Ambil semua chapter dari cerita ini
+    chapters = db.query(Chapter).filter(Chapter.story_id == story_id).order_by(Chapter.chapter_number.asc()).all()
+
+    return [
+        {
+            "id": ch.id,
+            "story_id": ch.story_id,
+            "title": ch.title,
+            "content": ch.content,
+            "chapter_number": ch.chapter_number,
+            "created_at": ch.created_at.isoformat() if ch.created_at else None,
+            "updated_at": ch.updated_at.isoformat() if ch.updated_at else None
+        } for ch in chapters
+    ]
