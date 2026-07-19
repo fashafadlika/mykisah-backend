@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 
 from app.database import get_db
-from app.models.story import Story, StoryGenre, StoryReview
+from app.models.story import Story, StoryGenre, StoryReview, Chapter
 from app.models.user import User
 from app.models.notification import Notification
 from app.dependencies import get_current_user
@@ -62,6 +62,7 @@ def _serialize_story(story: Story, username: str, db: Session) -> dict:
     return {
         "id": story.id,
         "title": story.title,
+        "synopsis": story.synopsis,
         "cover_url": story.cover_url,
         "author_username": username,
         "status": story.status,
@@ -230,4 +231,53 @@ def reject_submission(
         "success": True,
         "message": f"Novel '{story.title}' telah ditolak.",
         "data": _serialize_story(story, author.username if author else "Unknown", db)
+    }
+
+
+@router.get("/{story_id}", status_code=status.HTTP_200_OK)
+def get_submission_detail_for_admin(
+    story_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Pastikan yang akses admin
+    _require_admin(current_user)
+
+    # 2. Ambil story berdasarkan id, pastikan ada
+    story = db.query(Story).filter(Story.id == story_id).first()
+    if not story:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission tidak ditemukan!"
+        )
+
+    # 3. Hitung total chapter dan ambil daftar chapternya (preview, tanpa content)
+    chapters_data = (
+        db.query(Chapter.id, Chapter.chapter_number, Chapter.title)
+        .filter(Chapter.story_id == story.id)
+        .order_by(Chapter.chapter_number.asc())
+        .all()
+    )
+
+    chapters_list = [
+        {
+            "id": c.id,
+            "chapter_number": c.chapter_number,
+            "title": c.title
+        }
+        for c in chapters_data
+    ]
+
+    # 4. Serialisasi data story dan gabungkan dengan detail chapter
+    author = db.query(User).filter(User.id == story.user_id).first()
+    author_username = author.username if author else "Unknown"
+
+    story_data = _serialize_story(story, author_username, db)
+    story_data["total_chapters"] = len(chapters_list)
+    story_data["chapters"] = chapters_list
+
+    return {
+        "success": True,
+        "message": "Detail submission berhasil diambil.",
+        "data": story_data
     }
