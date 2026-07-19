@@ -55,3 +55,34 @@ class SubmissionUpdate(BaseModel):
     genre_ids: Optional[List[int]] = None
     chapter_title: Optional[str] = None
     chapter_content: Optional[str] = None
+
+
+# ─── Schema untuk manajemen chapter (dipakai oleh /my-works/) ────────────────
+
+class ChapterCreate(BaseModel):
+    """Schema untuk tambah chapter baru ke cerita yang sudah published."""
+
+    title: str = Field(..., min_length=1, max_length=255)
+    content: str = Field(..., min_length=1)
+
+
+class ChapterUpdate(BaseModel):
+    """Schema untuk edit chapter — semua field opsional."""
+
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    content: Optional[str] = Field(None, min_length=1)
+
+
+class ChapterResponse(BaseModel):
+    """Response data chapter yang dikembalikan ke Flutter."""
+
+    id: int
+    story_id: int
+    title: str
+    content: str
+    chapter_number: int
+    created_at: str
+    updated_at: str
+
+    class Config:
+        from_attributes = True
