@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
-from app.models.story import Story, Chapter, StoryView
+from app.models.story import Story, Chapter, StoryView, StoryGenre
 from app.models.user import User
 from app.models.bookmark import Bookmark
+from app.routes.genres import GENRES
 
 router = APIRouter(
     prefix="/stories",
@@ -66,7 +68,49 @@ def get_latest_stories(limit: int = 10, db: Session = Depends(get_db)):
         "data": result
     }
 
+# PENTING: route /search harus di atas /{story_id} agar FastAPI tidak salah baca "search" sebagai story_id
+@router.get("/search")
+def search_stories(
+    query: Optional[str] = Query(None),
+    genre_name: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    # Base: hanya story yang sudah published
+    q = db.query(Story).filter(Story.status == "published")
+
+    if query:
+        q = q.filter(Story.title.ilike(f"%{query}%"))
+
+    if genre_name:
+        # Cari genre_id dari list hardcoded GENRES
+        genre_id = next((g["id"] for g in GENRES if g["name"].lower() == genre_name.lower()), None)
+        if genre_id is None:
+            return []  # genre tidak dikenal → hasil kosong
+        q = q.join(StoryGenre, Story.id == StoryGenre.story_id).filter(StoryGenre.genre_id == genre_id)
+
+    stories = q.all()
+
+    # Mapping id → name untuk lookup genre setiap story
+    genre_map = {g["id"]: g["name"] for g in GENRES}
+
+    return [
+        {
+            "id": s.id,
+            "title": s.title,
+            "user_id": s.user_id,
+            "cover_url": s.cover_url,
+            "synopsis": s.synopsis or "",
+            "genres": [
+                {"name": genre_map.get(sg.genre_id, "Unknown")}
+                for sg in db.query(StoryGenre).filter(StoryGenre.story_id == s.id).all()
+            ],
+        }
+        for s in stories
+    ]
+
+
 @router.get("/{story_id}")
+
 def get_story_detail(story_id: int, db: Session = Depends(get_db)):
     # 1. Ambil data story utama
     story = db.query(Story).filter(Story.id == story_id).first()
