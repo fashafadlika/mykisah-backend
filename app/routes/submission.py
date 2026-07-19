@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.notification import Notification
 from app.dependencies import get_current_user
 from app.routes.genres import GENRES
-from app.schemas.submission import SubmissionCreate
+from app.schemas.submission import SubmissionCreate, SubmissionResubmit
 
 router = APIRouter(
     prefix="/submissions",
@@ -174,5 +174,85 @@ def get_submission_detail(
     return {
         "success": True,
         "message": "Detail submission berhasil diambil.",
+        "data": _serialize_story(story, current_user.username, db)
+    }
+
+
+@router.put("/{story_id}/resubmit", status_code=status.HTTP_200_OK)
+def resubmit_submission(
+    story_id: int,
+    payload: SubmissionResubmit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Cari submission berdasarkan id, pastikan milik user yang login
+    story = (
+        db.query(Story)
+        .filter(Story.id == story_id, Story.user_id == current_user.id)
+        .first()
+    )
+    if not story:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Submission tidak ditemukan!"
+        )
+
+    # 2. Pastikan status saat ini adalah rejected
+    if story.status != "rejected":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Hanya submission berstatus 'rejected' yang bisa disubmit ulang (status saat ini: {story.status})!"
+        )
+
+    # 3. Update field, status, genre, dan kirim notifikasi ke admin dalam 1 transaksi
+    try:
+        # Update field yang dikirim di payload
+        if payload.title is not None:
+            story.title = payload.title
+        if payload.synopsis is not None:
+            story.synopsis = payload.synopsis
+        if payload.cover_url is not None:
+            story.cover_url = payload.cover_url
+
+        # Set status kembali ke pending, perbarui waktu submit, dan kosongkan pesan penolakan
+        story.status = "pending"
+        story.submitted_at = func.now()
+        story.reject_message = None
+
+        # Jika genre_ids dikirim, update relasi genre
+        if payload.genre_ids is not None:
+            # Hapus genre lama
+            db.query(StoryGenre).filter(StoryGenre.story_id == story.id).delete()
+            # Masukkan genre baru
+            db.add_all([
+                StoryGenre(story_id=story.id, genre_id=genre_id)
+                for genre_id in payload.genre_ids
+            ])
+
+        # Kirim notifikasi baru ke semua admin
+        admins = db.query(User).filter(User.role == "admin").all()
+        db.add_all([
+            Notification(
+                user_id=admin.id,
+                story_id=story.id,
+                type="new_submission",
+                message=f"{current_user.username} mengirim novel baru: {story.title}",
+                is_read=False,
+            )
+            for admin in admins
+        ])
+
+        db.commit()
+        db.refresh(story)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Gagal melakukan submit ulang novel: {str(e)}"
+        )
+
+    return {
+        "success": True,
+        "message": "Novel berhasil disubmit ulang, menunggu review admin.",
         "data": _serialize_story(story, current_user.username, db)
     }
