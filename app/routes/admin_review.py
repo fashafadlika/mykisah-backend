@@ -99,6 +99,32 @@ def get_all_pending_submissions(
         "data": result
     }
 
+@router.get("/history", status_code=status.HTTP_200_OK)
+def get_review_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # 1. Pastikan yang akses admin
+    _require_admin(current_user)
+
+    # 2. Ambil semua submission yang SUDAH diproses (published/rejected) dari semua user
+    stories = (
+        db.query(Story)
+        .filter(Story.status.in_(["published", "rejected"]))
+        .order_by(desc(Story.submitted_at))
+        .all()
+    )
+
+    result = []
+    for story in stories:
+        author = db.query(User).filter(User.id == story.user_id).first()
+        result.append(_serialize_story(story, author.username if author else "Unknown", db))
+
+    return {
+        "success": True,
+        "message": "Berhasil mengambil riwayat review.",
+        "data": result
+    }
 
 @router.post("/{story_id}/approve", status_code=status.HTTP_200_OK)
 def approve_submission(
