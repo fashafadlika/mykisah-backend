@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 from routes import stories
 from routes import genres
+from routes import submissions
 from search_service.search_routes import router as search_router
 
 Base.metadata.create_all(bind=engine)
@@ -23,7 +24,9 @@ from routes import chapters
 app.include_router(stories.router)
 app.include_router(genres.router)
 app.include_router(chapters.router)
+app.include_router(submissions.router)
 app.include_router(search_router)
+
 @app.get("/")
 def root():
-    return {"message": "Story Service is running"}
+    return {"message": "Story Service is running"}

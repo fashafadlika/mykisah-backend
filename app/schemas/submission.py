@@ -13,6 +13,9 @@ class SubmissionCreate(BaseModel):
     synopsis: str = Field(..., min_length=20, max_length=2000)
     cover_url: str
     genre_ids: List[int] = Field(..., min_length=1, max_length=5)
+    status: str = "pending"
+    chapter_title: Optional[str] = None
+    chapter_content: Optional[str] = None
 
     # Pastikan semua genre_id yang dikirim user beneran ada di list genre yang valid
     @field_validator("genre_ids")
@@ -43,3 +46,12 @@ class SubmissionResubmit(BaseModel):
         if invalid:
             raise ValueError(f"Genre id tidak valid: {invalid}")
         return v
+
+
+class SubmissionUpdate(BaseModel):
+    title: Optional[str] = None
+    synopsis: Optional[str] = None
+    cover_url: Optional[str] = None
+    genre_ids: Optional[List[int]] = None
+    chapter_title: Optional[str] = None
+    chapter_content: Optional[str] = None

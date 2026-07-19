@@ -28,7 +28,8 @@ def _serialize_story(story: Story, username: str, db: Session) -> dict:
         .filter(StoryGenre.story_id == story.id)
         .all()
     )
-    genre_names = [GENRE_MAP.get(genre_id, "Unknown") for (genre_id,) in genre_ids]
+    genre_names = [GENRE_MAP.get(genre_id, "Unknown")
+                   for (genre_id,) in genre_ids]
 
     return {
         "id": story.id,
@@ -222,7 +223,8 @@ def resubmit_submission(
         # Jika genre_ids dikirim, update relasi genre
         if payload.genre_ids is not None:
             # Hapus genre lama
-            db.query(StoryGenre).filter(StoryGenre.story_id == story.id).delete()
+            db.query(StoryGenre).filter(
+                StoryGenre.story_id == story.id).delete()
             # Masukkan genre baru
             db.add_all([
                 StoryGenre(story_id=story.id, genre_id=genre_id)
