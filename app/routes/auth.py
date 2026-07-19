@@ -5,7 +5,7 @@ from typing import Optional
 from datetime import datetime, date, timedelta 
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import User
+from app.models.user import User
 from app.models.user import RoleEnum
 from passlib.context import CryptContext
 from app.utils import send_otp_email, create_access_token
