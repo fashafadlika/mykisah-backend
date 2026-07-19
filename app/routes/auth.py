@@ -6,6 +6,7 @@ from datetime import datetime, date, timedelta
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
+from app.models.user import RoleEnum
 from passlib.context import CryptContext
 from app.utils import send_otp_email, create_access_token
 
@@ -174,8 +175,9 @@ def register_user(
         password=hashed_password,
         birthdate=parsed_birthdate,
         is_verified=False,
-        otp_code=otp_code,             
-        otp_expired_at=otp_expired_at  
+        otp_code=otp_code,
+        otp_expired_at=otp_expired_at,
+        role=RoleEnum.user,
     )
 
     # Simpan ke database
@@ -242,5 +244,6 @@ def login_user(data: UserLoginSchema, db: Session = Depends(get_db)):
         "success": True,
         "access_token": access_token,
         "token_type": "bearer",
-        "user_id": user.id
+        "user_id": user.id,
+        "role": user.role.value,
     }
