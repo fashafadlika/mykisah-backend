@@ -11,7 +11,7 @@ class SubmissionCreate(BaseModel):
 
     title: str = Field(..., min_length=3, max_length=255)
     synopsis: str = Field(..., min_length=20, max_length=2000)
-    cover_url: str
+    cover_url: str = Field(..., min_length=1)
     genre_ids: List[int] = Field(..., min_length=1, max_length=5)
     status: str = "pending"
     chapter_title: Optional[str] = None
