@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.user import User
+from models.user import User, RoleEnum
 from schemas.user import UserRegister, VerifyOTP, UserLogin, TokenResponse, ResendOTP
 from core.auth import hash_password, verify_password, create_access_token
 
@@ -37,6 +37,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         is_verified=False,
         otp_code=otp_code,
         otp_expired_at=otp_expired_at,
+        role=RoleEnum.user,
     )
     db.add(new_user)
     db.commit()
@@ -88,7 +89,11 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Akun belum diverifikasi, cek OTP")
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        role=user.role.value,
+    )
 
 @router.post("/resend-otp")
 def resend_otp(payload: ResendOTP, db: Session = Depends(get_db)):
