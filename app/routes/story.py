@@ -42,12 +42,12 @@ def get_popular_stories(limit: int = 10, db: Session = Depends(get_db)):
 
 @router.get("/latest")
 def get_latest_stories(limit: int = 10, db: Session = Depends(get_db)):
-    # Query: Ambil story berdasarkan chapter yang paling baru dibuat
+    # Query: Ambil story berdasarkan chapter yang paling baru dibuat (group by untuk MySQL compatibility)
     latest_query = db.query(Story)\
         .join(Chapter, Story.id == Chapter.story_id)\
         .filter(Story.status == 'published')\
-        .order_by(desc(Chapter.created_at))\
-        .distinct(Story.id)\
+        .group_by(Story.id)\
+        .order_by(desc(func.max(Chapter.created_at)))\
         .limit(limit).all()
 
     result = []
