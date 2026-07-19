@@ -11,5 +11,6 @@ def read_users_me(current_user = Depends(get_current_user)):
         "email": current_user.email,
         "username": current_user.username,
         "bio": current_user.bio,
-        "avatar_url": current_user.profile_picture # Mapping kolom DB ke JSON API
+        "avatar_url": current_user.profile_picture,
+        "role": current_user.role.value,
     }
