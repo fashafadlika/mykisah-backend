@@ -34,6 +34,7 @@ def _serialize_story(story: Story, username: str, db: Session) -> dict:
     return {
         "id": story.id,
         "title": story.title,
+        "synopsis": story.synopsis,
         "cover_url": story.cover_url,
         "author_username": username,
         "status": story.status,
