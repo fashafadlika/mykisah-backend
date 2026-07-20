@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 
 from app.database import get_db
-from app.models.story import Story, StoryGenre, Chapter, StoryView
+from app.models.story import Story, StoryGenre, Chapter, StoryView, ChapterView
 from app.models.user import User
 from app.models.notification import Notification
 from app.dependencies import get_current_user
@@ -317,6 +317,12 @@ def delete_submission(
 
     # 2. Hapus story beserta relasinya
     try:
+        # Hapus data chapter views
+        chapters = db.query(Chapter).filter(Chapter.story_id == story.id).all()
+        chapter_ids = [ch.id for ch in chapters]
+        if chapter_ids:
+            db.query(ChapterView).filter(ChapterView.chapter_id.in_(chapter_ids)).delete(synchronize_session=False)
+            
         # Hapus data chapter
         db.query(Chapter).filter(Chapter.story_id == story.id).delete()
         # Hapus data views
