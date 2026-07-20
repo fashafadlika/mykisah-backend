@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from app.database import get_db
-from app.models.story import Story, Chapter, StoryView, StoryGenre
+from app.models.story import Story, Chapter, StoryView, StoryGenre, ChapterView
 from app.models.user import User
 from app.models.bookmark import Bookmark
 from app.routes.genres import GENRES
@@ -164,14 +164,45 @@ def get_story_chapters(story_id: int, db: Session = Depends(get_db)):
     # Ambil semua chapter dari cerita ini
     chapters = db.query(Chapter).filter(Chapter.story_id == story_id).order_by(Chapter.chapter_number.asc()).all()
 
-    return [
-        {
+    result = []
+    for ch in chapters:
+        views_count = db.query(func.count(ChapterView.id)).filter(ChapterView.chapter_id == ch.id).scalar() or 0
+        result.append({
             "id": ch.id,
             "story_id": ch.story_id,
             "title": ch.title,
             "content": ch.content,
             "chapter_number": ch.chapter_number,
+            "views_count": views_count,
             "created_at": ch.created_at.isoformat() if ch.created_at else None,
             "updated_at": ch.updated_at.isoformat() if ch.updated_at else None
-        } for ch in chapters
-    ]
+        })
+    return result
+
+
+@router.post("/chapters/{chapter_id}/view")
+def record_chapter_view(chapter_id: int, user_id: int, db: Session = Depends(get_db)):
+    """Catat view chapter (unik per user). Tidak bisa di-spam."""
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter tidak ditemukan")
+
+    # Cek apakah user sudah pernah membaca chapter ini
+    existing = db.query(ChapterView).filter(
+        ChapterView.chapter_id == chapter_id,
+        ChapterView.user_id == user_id
+    ).first()
+
+    if existing:
+        # Sudah pernah baca — tidak tambah view lagi
+        views_count = db.query(func.count(ChapterView.id)).filter(ChapterView.chapter_id == chapter_id).scalar() or 0
+        return {"success": True, "already_viewed": True, "views_count": views_count}
+
+    # Tambah record view baru
+    new_view = ChapterView(chapter_id=chapter_id, user_id=user_id)
+    db.add(new_view)
+    db.commit()
+
+    views_count = db.query(func.count(ChapterView.id)).filter(ChapterView.chapter_id == chapter_id).scalar() or 0
+    return {"success": True, "already_viewed": False, "views_count": views_count}
+
