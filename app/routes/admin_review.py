@@ -283,49 +283,40 @@ def get_submission_detail_for_admin(
         "data": story_data
     }
 
-
-@router.delete("/{story_id}", status_code=status.HTTP_200_OK)
-def delete_story_by_admin(
+@router.patch("/{story_id}/archive", status_code=status.HTTP_200_OK)
+def archive_story_by_admin(
     story_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # 1. Pastikan yang akses admin
     _require_admin(current_user)
 
-    # 2. Cari story berdasarkan id
     story = db.query(Story).filter(Story.id == story_id).first()
+
     if not story:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Novel/Story tidak ditemukan!"
+            detail="Novel tidak ditemukan."
         )
 
-    # 3. Hapus story beserta relasinya dan reportnya
     try:
-        # Hapus data chapter views
-        chapters = db.query(Chapter).filter(Chapter.story_id == story.id).all()
-        chapter_ids = [ch.id for ch in chapters]
-        if chapter_ids:
-            db.query(ChapterView).filter(ChapterView.chapter_id.in_(chapter_ids)).delete(synchronize_session=False)
-
-        # Hapus data chapter
-        db.query(Chapter).filter(Chapter.story_id == story.id).delete()
-        # Hapus data views
-        db.query(StoryView).filter(StoryView.story_id == story.id).delete()
-        # Hapus data report terkait story ini
-        db.query(Report).filter(Report.novel_id == story.id).delete(synchronize_session=False)
-        # Hapus story (bookmarks, genres, reviews terhapus otomatis karena cascade delete-orphan)
-        db.delete(story)
+        story.status = "archived"
         db.commit()
-    except Exception as e:
+        db.refresh(story)
+
+        return {
+            "success": True,
+            "message": f"Novel '{story.title}' berhasil ditakedown.",
+            "story": {
+                "id": story.id,
+                "title": story.title,
+                "status": story.status,
+            }
+        }
+
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Gagal menghapus novel: {str(e)}"
+            detail="Gagal melakukan take down novel."
         )
-
-    return {
-        "success": True,
-        "message": f"Novel '{story.title}' berhasil dihapus/di-takedown."
-    }

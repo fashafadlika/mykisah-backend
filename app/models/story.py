@@ -12,7 +12,7 @@ class Story(Base):
     title = Column(String(255), nullable=False)
     synopsis = Column(Text)
     cover_url = Column(String(255))
-    status = Column(Enum('draft', 'pending', 'published', 'rejected', name="story_status_enum"), default='draft')
+    status = Column(Enum('draft', 'pending', 'published', 'rejected', 'archived', name="story_status_enum"), default='draft')
 
     # kolom tambahan yang tadinya belum ada, dipakai di alur submission & review admin
     reject_message = Column(Text, nullable=True)
