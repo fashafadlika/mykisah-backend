@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+__init__.py
+static/avatars/*
+static/covers/*

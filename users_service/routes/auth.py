@@ -4,8 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from database import get_db
-from models.user import User
-from schemas.user import UserRegister, VerifyOTP, UserLogin, TokenResponse
+from models.user import User, RoleEnum
+from schemas.user import UserRegister, VerifyOTP, UserLogin, TokenResponse, ResendOTP
 from core.auth import hash_password, verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -37,6 +37,7 @@ def register(payload: UserRegister, db: Session = Depends(get_db)):
         is_verified=False,
         otp_code=otp_code,
         otp_expired_at=otp_expired_at,
+        role=RoleEnum.user,
     )
     db.add(new_user)
     db.commit()
@@ -88,4 +89,44 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Akun belum diverifikasi, cek OTP")
 
     access_token = create_access_token(data={"sub": str(user.id)})
-    return TokenResponse(access_token=access_token)
+    return TokenResponse(
+        access_token=access_token,
+        user_id=user.id,
+        role=user.role.value,
+    )
+
+@router.post("/resend-otp")
+def resend_otp(payload: ResendOTP, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+    
+    if user.is_verified:
+        raise HTTPException(status_code=400, detail="Akun sudah terverifikasi")
+    
+    now = datetime.now(timezone.utc)
+
+    #Cooldown otp_expired_at = waktu_kirim + 10 menit
+    if user.otp_expired_at:
+        expired_at = user.otp_expired_at
+        if expired_at.tzinfo is None:
+            expired_at = expired_at.replace(tzinfo=timezone.utc)
+        last_sent_at = expired_at - timedelta(minutes=10)
+        cooldown_until = last_sent_at + timedelta(seconds=60)
+        if now < cooldown_until:
+            remaining = int((cooldown_until - now).total_seconds())
+            raise HTTPException(
+                status_code=429,
+                detail=f"Tunggu {remaining} detik sebelum minta OTP baru",
+            )
+        
+    otp_code = generate_otp()
+    otp_expired_at = now +timedelta(minutes=10)
+
+    user.otp_code = otp_code
+    user.otp_expired_at = otp_expired_at
+    db.commit()
+
+    print(f"[OTP] Kode baru untuk {payload.email}: {otp_code}")
+
+    return {"message": "OTP baru sudah dikirim, cek email kamu"}

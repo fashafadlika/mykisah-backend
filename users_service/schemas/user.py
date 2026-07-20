@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from datetime import date, datetime
 from typing import Optional
 
@@ -30,13 +30,30 @@ class UserResponse(BaseModel):
     username: str
     birthdate: Optional[date] = None
     bio: Optional[str] = None
-    profile_picture: Optional[str] = None
+    avatar_url: Optional[str] = Field(default=None, validation_alias="profile_picture")
     role: str
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user_id: int
+    role: str
+
+class ResendOTP(BaseModel):
+    email: EmailStr
+
+
+# schemas/user.py — tambahkan di bawah UserResponse
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+
+    class Config:
+        from_attributes = True
