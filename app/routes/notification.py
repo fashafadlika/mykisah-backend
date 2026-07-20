@@ -137,3 +137,38 @@ def mark_as_read(
     db.commit()
     db.refresh(db_notification)
     return db_notification
+
+@router.delete("/me/clear", status_code=status.HTTP_200_OK)
+def clear_my_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear all notifications for the current logged-in user
+    """
+    db.query(Notification).filter(Notification.user_id == current_user.id).delete()
+    db.commit()
+    return {"success": True, "message": "Semua notifikasi berhasil dibersihkan."}
+
+@router.delete("/admin/clear", status_code=status.HTTP_200_OK)
+def clear_admin_notifications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear all admin notifications (submissions & reports) for the current admin
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Hanya admin yang bisa melakukan tindakan ini!"
+        )
+        
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.type.in_(["new_submission", "new_report"])
+    ).delete(synchronize_session=False)
+    
+    db.commit()
+    return {"success": True, "message": "Semua notifikasi admin berhasil dibersihkan."}
+
