@@ -1,5 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from app.database import get_db
 from app.dependencies import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -14,3 +17,15 @@ def read_users_me(current_user = Depends(get_current_user)):
         "avatar_url": current_user.profile_picture,
         "role": current_user.role.value,
     }
+
+@router.get("/users/{user_id}")
+def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
+    """Ambil informasi publik pengguna berdasarkan ID."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User tidak ditemukan")
+    return {
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+    }

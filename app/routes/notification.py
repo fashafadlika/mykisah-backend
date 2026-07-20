@@ -61,12 +61,12 @@ def get_admin_submission_notifications(
             detail="Hanya admin yang bisa mengakses ini!"
         )
 
-    # 2. Query notifikasi submission baru untuk admin ini
+    # 2. Query notifikasi submission & report baru untuk admin ini
     notifications = (
         db.query(Notification)
         .filter(
             Notification.user_id == current_user.id,
-            Notification.type == "new_submission"
+            Notification.type.in_(["new_submission", "new_report"])
         )
         .order_by(Notification.created_at.desc())
         .all()
