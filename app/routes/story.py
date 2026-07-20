@@ -176,6 +176,7 @@ def get_story_chapters(story_id: int, db: Session = Depends(get_db)):
             "title": ch.title,
             "content": ch.content,
             "chapter_number": ch.chapter_number,
+            "cover_url": ch.cover_url,
             "views_count": views_count,
             "created_at": ch.created_at.isoformat() if ch.created_at else None,
             "updated_at": ch.updated_at.isoformat() if ch.updated_at else None

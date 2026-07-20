@@ -38,6 +38,7 @@ class Chapter(Base):
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
     chapter_number = Column(Integer, nullable=False)
+    cover_url = Column(String(500), nullable=True)
 
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))

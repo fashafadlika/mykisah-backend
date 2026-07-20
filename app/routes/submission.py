@@ -99,7 +99,8 @@ def create_submission(
                 story_id=new_story.id,
                 title=payload.chapter_title,
                 content=payload.chapter_content or "",
-                chapter_number=1
+                chapter_number=1,
+                cover_url=payload.chapter_cover_url,
             ))
 
         # Cari semua admin, kirim notifikasi ke masing-masing jika bukan draf
@@ -260,8 +261,8 @@ def update_submission(
                 for genre_id in payload.genre_ids
             ])
 
-        # Jika chapter_title atau chapter_content dikirim, update/buat chapter pertama
-        if payload.chapter_title is not None or payload.chapter_content is not None:
+        # Jika chapter_title, chapter_content, atau chapter_cover_url dikirim, update/buat chapter pertama
+        if payload.chapter_title is not None or payload.chapter_content is not None or payload.chapter_cover_url is not None:
             first_chapter = (
                 db.query(Chapter)
                 .filter(Chapter.story_id == story.id)
@@ -273,12 +274,15 @@ def update_submission(
                     first_chapter.title = payload.chapter_title
                 if payload.chapter_content is not None:
                     first_chapter.content = payload.chapter_content
+                if payload.chapter_cover_url is not None:
+                    first_chapter.cover_url = payload.chapter_cover_url
             else:
                 db.add(Chapter(
                     story_id=story.id,
                     title=payload.chapter_title or "Chapter 1",
                     content=payload.chapter_content or "",
-                    chapter_number=1
+                    chapter_number=1,
+                    cover_url=payload.chapter_cover_url,
                 ))
 
         db.commit()
