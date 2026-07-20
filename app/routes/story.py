@@ -15,11 +15,12 @@ router = APIRouter(
 
 @router.get("/popular")
 def get_popular_stories(limit: int = 10, db: Session = Depends(get_db)):
-    # Query: Ambil story, hitung jumlah view, gabungkan, urutkan dari terbanyak
+    # Query: Ambil story, hitung jumlah view per chapter, gabungkan, urutkan dari terbanyak
     popular_query = db.query(
         Story, 
-        func.count(StoryView.id).label('total_views')
-    ).outerjoin(StoryView, Story.id == StoryView.story_id)\
+        func.count(ChapterView.id).label('total_views')
+    ).outerjoin(Chapter, Story.id == Chapter.story_id)\
+     .outerjoin(ChapterView, Chapter.id == ChapterView.chapter_id)\
      .filter(Story.status == 'published')\
      .group_by(Story.id)\
      .order_by(desc('total_views'))\
@@ -121,9 +122,11 @@ def get_story_detail(story_id: int, db: Session = Depends(get_db)):
     author = db.query(User).filter(User.id == story.user_id).first()
     author_username = author.username if author else "Unknown Author"
 
-    # 3. Hitung statistik total views dan total bookmarks (stars)
-    views_count = db.query(func.count(StoryView.id)).filter(StoryView.story_id == story_id).scalar()
-    stars_count = db.query(func.count(Bookmark.id)).filter(Bookmark.story_id == story_id).scalar()
+    # 3. Hitung statistik total views (total view dari semua chapter) dan total bookmarks (stars)
+    views_count = db.query(func.count(ChapterView.id))\
+        .join(Chapter, Chapter.id == ChapterView.chapter_id)\
+        .filter(Chapter.story_id == story_id).scalar() or 0
+    stars_count = db.query(func.count(Bookmark.id)).filter(Bookmark.story_id == story_id).scalar() or 0
     
     # 4. Ambil semua list chapter yang dimiliki oleh novel ini
     chapters = db.query(Chapter).filter(Chapter.story_id == story_id).order_by(Chapter.chapter_number.asc()).all()
