@@ -21,3 +21,9 @@ class UserProfileResponse(BaseModel):
     class Config:
         from_attributes = True 
         populate_by_name = True 
+
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+ 
