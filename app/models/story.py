@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from app.database import Base
@@ -43,6 +43,24 @@ class Chapter(Base):
     updated_at = Column(DateTime, default=datetime.now(timezone.utc), onupdate=datetime.now(timezone.utc))
 
     story = relationship("Story", back_populates="chapters")
+    chapter_views = relationship("ChapterView", back_populates="chapter", cascade="all, delete-orphan")
+
+
+class ChapterView(Base):
+    """Menyimpan siapa saja yang sudah pernah membaca chapter ini (unik per user-chapter)."""
+    __tablename__ = "chapter_views"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chapter_id = Column(Integer, ForeignKey("chapters.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    viewed_at = Column(DateTime, default=datetime.now(timezone.utc))
+
+    chapter = relationship("Chapter", back_populates="chapter_views")
+
+    __table_args__ = (
+        UniqueConstraint("chapter_id", "user_id", name="uq_chapter_user_view"),
+    )
+
 
 
 class StoryView(Base):
