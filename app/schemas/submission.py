@@ -16,6 +16,7 @@ class SubmissionCreate(BaseModel):
     status: str = "pending"
     chapter_title: Optional[str] = None
     chapter_content: Optional[str] = None
+    chapter_cover_url: Optional[str] = None
 
     # Pastikan semua genre_id yang dikirim user beneran ada di list genre yang valid
     @field_validator("genre_ids")
@@ -55,6 +56,7 @@ class SubmissionUpdate(BaseModel):
     genre_ids: Optional[List[int]] = None
     chapter_title: Optional[str] = None
     chapter_content: Optional[str] = None
+    chapter_cover_url: Optional[str] = None
 
 
 # ─── Schema untuk manajemen chapter (dipakai oleh /my-works/) ────────────────
@@ -64,6 +66,7 @@ class ChapterCreate(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1)
+    cover_url: Optional[str] = None
 
 
 class ChapterUpdate(BaseModel):
@@ -71,6 +74,7 @@ class ChapterUpdate(BaseModel):
 
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     content: Optional[str] = Field(None, min_length=1)
+    cover_url: Optional[str] = None
 
 
 class ChapterResponse(BaseModel):
@@ -81,6 +85,7 @@ class ChapterResponse(BaseModel):
     title: str
     content: str
     chapter_number: int
+    cover_url: Optional[str] = None
     created_at: str
     updated_at: str
 
