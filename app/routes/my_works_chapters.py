@@ -42,6 +42,7 @@ def _serialize_chapter(chapter: Chapter) -> dict:
         "title": chapter.title,
         "content": chapter.content,
         "chapter_number": chapter.chapter_number,
+        "cover_url": chapter.cover_url,
         "created_at": chapter.created_at.isoformat() if chapter.created_at else None,
         "updated_at": chapter.updated_at.isoformat() if chapter.updated_at else None,
     }
@@ -109,6 +110,7 @@ def add_chapter(
             title=payload.title,
             content=payload.content,
             chapter_number=next_chapter_number,
+            cover_url=payload.cover_url,
         )
         db.add(new_chapter)
         db.commit()
@@ -153,10 +155,10 @@ def update_chapter(
             detail="Chapter tidak ditemukan.",
         )
 
-    if payload.title is None and payload.content is None:
+    if payload.title is None and payload.content is None and payload.cover_url is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Minimal satu field (title atau content) harus diisi.",
+            detail="Minimal satu field (title, content, atau cover_url) harus diisi.",
         )
 
     try:
@@ -164,6 +166,8 @@ def update_chapter(
             chapter.title = payload.title
         if payload.content is not None:
             chapter.content = payload.content
+        if payload.cover_url is not None:
+            chapter.cover_url = payload.cover_url
 
         db.commit()
         db.refresh(chapter)
