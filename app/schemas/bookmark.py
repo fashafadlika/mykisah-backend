@@ -21,6 +21,7 @@ class BookmarkCreate(BookmarkBase):
 class BookmarkResponse(BookmarkBase):
     id: int
     created_at: datetime
+    story: StoryNestedResponse
 
     class Config:
         from_attributes = True  
