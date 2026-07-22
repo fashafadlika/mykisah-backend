@@ -6,7 +6,8 @@ from app.database import engine, Base
 from app.models.bookmark import Bookmark
 from app.models.story import Story, Chapter, StoryView, ChapterView
 from app.models.report import Report
-from app.models.user import User 
+from app.models.user import User
+from app.models.takedown import StoryTakedown  # noqa: F401 – ensures table is created
 
 Base.metadata.create_all(bind=engine)
 

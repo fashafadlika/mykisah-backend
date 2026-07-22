@@ -2,12 +2,14 @@ from sqlalchemy import func, desc
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+from typing import Optional
 
 from app.database import get_db
 from app.models.story import Story, StoryGenre, StoryReview, Chapter, StoryView, ChapterView
 from app.models.report import Report
 from app.models.user import User
 from app.models.notification import Notification
+from app.models.takedown import StoryTakedown
 from app.dependencies import get_current_user
 from app.routes.genres import GENRES
 
@@ -21,6 +23,11 @@ GENRE_MAP = {genre["id"]: genre["name"] for genre in GENRES}
 
 class RejectPayload(BaseModel):
     note: str = Field(..., min_length=5, max_length=500)
+
+
+class ArchivePayload(BaseModel):
+    reason: Optional[str] = Field(None, min_length=5, max_length=1000)
+    report_id: Optional[int] = None
 
 
 # Pastikan yang manggil endpoint ini memang admin, bukan user biasa
@@ -52,7 +59,7 @@ def _get_pending_story(db: Session, story_id: int) -> Story:
 
 
 # Ubah 1 object Story jadi dict rapi buat response API
-def _serialize_story(story: Story, username: str, db: Session) -> dict:
+def _serialize_story(story: Story, author: User, db: Session) -> dict:
     genre_ids = (
         db.query(StoryGenre.genre_id)
         .filter(StoryGenre.story_id == story.id)
@@ -60,12 +67,16 @@ def _serialize_story(story: Story, username: str, db: Session) -> dict:
     )
     genre_names = [GENRE_MAP.get(genre_id, "Unknown") for (genre_id,) in genre_ids]
 
+    username = author.username if author else "Unknown"
+    avatar_url = author.profile_picture if author and author.profile_picture else None
+
     return {
         "id": story.id,
         "title": story.title,
         "synopsis": story.synopsis,
         "cover_url": story.cover_url,
         "author_username": username,
+        "author_avatar_url": avatar_url,
         "status": story.status,
         "reject_message": story.reject_message,
         "genres": genre_names,
@@ -93,7 +104,7 @@ def get_all_pending_submissions(
     result = []
     for story in stories:
         author = db.query(User).filter(User.id == story.user_id).first()
-        result.append(_serialize_story(story, author.username if author else "Unknown", db))
+        result.append(_serialize_story(story, author, db))
 
     return {
         "success": True,
@@ -120,13 +131,14 @@ def get_review_history(
     result = []
     for story in stories:
         author = db.query(User).filter(User.id == story.user_id).first()
-        result.append(_serialize_story(story, author.username if author else "Unknown", db))
+        result.append(_serialize_story(story, author, db))
 
     return {
         "success": True,
         "message": "Berhasil mengambil riwayat review.",
         "data": result
     }
+
 
 @router.post("/{story_id}/approve", status_code=status.HTTP_200_OK)
 def approve_submission(
@@ -177,7 +189,7 @@ def approve_submission(
     return {
         "success": True,
         "message": f"Novel '{story.title}' berhasil disetujui.",
-        "data": _serialize_story(story, author.username if author else "Unknown", db)
+        "data": _serialize_story(story, author, db)
     }
 
 
@@ -231,7 +243,7 @@ def reject_submission(
     return {
         "success": True,
         "message": f"Novel '{story.title}' telah ditolak.",
-        "data": _serialize_story(story, author.username if author else "Unknown", db)
+        "data": _serialize_story(story, author, db)
     }
 
 
@@ -271,9 +283,8 @@ def get_submission_detail_for_admin(
 
     # 4. Serialisasi data story dan gabungkan dengan detail chapter
     author = db.query(User).filter(User.id == story.user_id).first()
-    author_username = author.username if author else "Unknown"
 
-    story_data = _serialize_story(story, author_username, db)
+    story_data = _serialize_story(story, author, db)
     story_data["total_chapters"] = len(chapters_list)
     story_data["chapters"] = chapters_list
 
@@ -283,9 +294,11 @@ def get_submission_detail_for_admin(
         "data": story_data
     }
 
-@router.patch("/{story_id}/archive", status_code=status.HTTP_200_OK)
-def archive_story_by_admin(
+
+@router.delete("/{story_id}", status_code=status.HTTP_200_OK)
+def delete_story_by_admin(
     story_id: int,
+    payload: Optional[ArchivePayload] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -300,23 +313,48 @@ def archive_story_by_admin(
         )
 
     try:
-        story.status = "archived"
+        # 0. Kirim notifikasi ke penulis (gunakan 0 agar dikirim walau story dihapus)
+        # Note: Notification harus tetap bisa diinsert walau story_id mengarah ke novel yang akan dihapus.
+        # Karena story_id di Notification bisa ondelete="SET NULL" atau kita jadikan NULL.
+        takedown_reason = (payload.reason if payload and payload.reason else "Dilakukan penghapusan oleh admin.")
+        db.add(Notification(
+            user_id=story.user_id,
+            story_id=None, # Jangan gunakan story.id karena story akan di hard delete dan bisa melanggar ForeignKey
+            type="story_taken_down",
+            message=(
+                f"Novel kamu '{story.title}' telah dihapus permanen (takedown) oleh admin. "
+                f"Alasan: {takedown_reason}"
+            ),
+            is_read=False,
+        ))
+
+        # 1. Hapus report terkait
+        from app.models.report import Report
+        db.query(Report).filter(Report.story_id == story.id).delete(synchronize_session=False)
+
+        # 2. Hapus chapter views terkait
+        from app.models.story import Chapter, ChapterView, StoryView
+        chapters = db.query(Chapter).filter(Chapter.story_id == story.id).all()
+        chapter_ids = [ch.id for ch in chapters]
+        if chapter_ids:
+            db.query(ChapterView).filter(ChapterView.chapter_id.in_(chapter_ids)).delete(synchronize_session=False)
+            
+        # 3. Hapus data chapter, takedowns, dan story views
+        db.query(Chapter).filter(Chapter.story_id == story.id).delete(synchronize_session=False)
+        db.query(StoryView).filter(StoryView.story_id == story.id).delete(synchronize_session=False)
+        db.query(StoryTakedown).filter(StoryTakedown.story_id == story.id).delete(synchronize_session=False)
+        
+        # 4. Hapus story (bookmarks, genres, reviews terhapus otomatis karena cascade delete-orphan)
+        db.delete(story)
         db.commit()
-        db.refresh(story)
 
         return {
             "success": True,
-            "message": f"Novel '{story.title}' berhasil ditakedown.",
-            "story": {
-                "id": story.id,
-                "title": story.title,
-                "status": story.status,
-            }
+            "message": f"Novel '{story.title}' berhasil dihapus secara permanen."
         }
-
-    except Exception:
+    except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Gagal melakukan take down novel."
+            detail=f"Gagal menghapus novel: {str(e)}"
         )

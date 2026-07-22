@@ -28,13 +28,22 @@ def get_popular_stories(limit: int = 10, db: Session = Depends(get_db)):
 
     # Susun data menjadi dictionary agar mudah diubah menjadi JSON
     result = []
+    genre_map = {g["id"]: g["name"] for g in GENRES}
     for story, total_views in popular_query:
+        genres = [
+            {"name": genre_map.get(sg.genre_id, "Unknown")}
+            for sg in db.query(StoryGenre).filter(StoryGenre.story_id == story.id).all()
+        ]
+        chapters_count = db.query(func.count(Chapter.id)).filter(Chapter.story_id == story.id).scalar() or 0
+
         result.append({
             "id": story.id,
             "title": story.title,
             "cover_url": story.cover_url,
             "synopsis": story.synopsis,
-            "views": total_views
+            "views": total_views,
+            "genres": genres,
+            "total_chapters": chapters_count
         })
         
     return {
@@ -54,13 +63,27 @@ def get_latest_stories(limit: int = 10, db: Session = Depends(get_db)):
         .limit(limit).all()
 
     result = []
+    genre_map = {g["id"]: g["name"] for g in GENRES}
     for story in latest_query:
+        views_count = db.query(func.count(ChapterView.id))\
+            .join(Chapter, Chapter.id == ChapterView.chapter_id)\
+            .filter(Chapter.story_id == story.id).scalar() or 0
+
+        genres = [
+            {"name": genre_map.get(sg.genre_id, "Unknown")}
+            for sg in db.query(StoryGenre).filter(StoryGenre.story_id == story.id).all()
+        ]
+
+        chapters_count = db.query(func.count(Chapter.id)).filter(Chapter.story_id == story.id).scalar() or 0
+
         result.append({
             "id": story.id,
             "title": story.title,
             "cover_url": story.cover_url,
             "synopsis": story.synopsis,
-            "views": 0 
+            "views": views_count,
+            "genres": genres,
+            "total_chapters": chapters_count
         })
         
     return {
@@ -91,23 +114,37 @@ def search_stories(
 
     stories = q.all()
 
-    # Mapping id → name untuk lookup genre setiap story
     genre_map = {g["id"]: g["name"] for g in GENRES}
 
-    return [
-        {
+    result = []
+    for s in stories:
+        author = db.query(User).filter(User.id == s.user_id).first()
+        author_username = author.username if author else f"Author {s.user_id}"
+        author_avatar_url = author.profile_picture if author and author.profile_picture else None
+
+        chapters_count = db.query(func.count(Chapter.id)).filter(Chapter.story_id == s.id).scalar() or 0
+
+        views_count = db.query(func.count(ChapterView.id))\
+            .join(Chapter, Chapter.id == ChapterView.chapter_id)\
+            .filter(Chapter.story_id == s.id).scalar() or 0
+
+        result.append({
             "id": s.id,
             "title": s.title,
             "user_id": s.user_id,
+            "author_username": author_username,
+            "author_avatar_url": author_avatar_url,
             "cover_url": s.cover_url,
             "synopsis": s.synopsis or "",
+            "views": views_count,
+            "total_chapters": chapters_count,
             "genres": [
                 {"name": genre_map.get(sg.genre_id, "Unknown")}
                 for sg in db.query(StoryGenre).filter(StoryGenre.story_id == s.id).all()
             ],
-        }
-        for s in stories
-    ]
+        })
+
+    return result
 
 
 @router.get("/{story_id}")
@@ -118,9 +155,13 @@ def get_story_detail(story_id: int, db: Session = Depends(get_db)):
     if not story:
         raise HTTPException(status_code=404, detail="Novel tidak ditemukan")
 
-    # 2. Ambil nama penulis dari relasi User
+    # 2. Blokir akses ke novel yang sudah di-takedown (archived)
+    if story.status == "archived":
+        raise HTTPException(status_code=404, detail="Novel tidak ditemukan")
+
     author = db.query(User).filter(User.id == story.user_id).first()
     author_username = author.username if author else "Unknown Author"
+    author_avatar_url = author.profile_picture if author and author.profile_picture else None
 
     # 3. Hitung statistik total views (total view dari semua chapter) dan total bookmarks (stars)
     views_count = db.query(func.count(ChapterView.id))\
@@ -132,19 +173,28 @@ def get_story_detail(story_id: int, db: Session = Depends(get_db)):
     chapters = db.query(Chapter).filter(Chapter.story_id == story_id).order_by(Chapter.chapter_number.asc()).all()
     total_chapters = len(chapters)
 
+    genre_map = {g["id"]: g["name"] for g in GENRES}
+    genres = [
+        {"name": genre_map.get(sg.genre_id, "Unknown")}
+        for sg in db.query(StoryGenre).filter(StoryGenre.story_id == story_id).all()
+    ]
+
     # 5. Kembalikan response terstruktur untuk Flutter
     return {
         "success": True,
         "message": "Detail novel berhasil diambil",
         "data": {
             "id": story.id,
+            "user_id": story.user_id,
             "title": story.title,
             "synopsis": story.synopsis,
             "cover_url": story.cover_url,
             "author_username": author_username,
+            "author_avatar_url": author_avatar_url,
             "views": views_count,
             "stars": stars_count,
             "total_chapters": total_chapters,
+            "genres": genres,
             "chapters": [
                 {
                     "id": ch.id,
@@ -159,9 +209,13 @@ def get_story_detail(story_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{story_id}/chapters")
 def get_story_chapters(story_id: int, db: Session = Depends(get_db)):
-    # Pastikan novel ada
+    # Pastikan novel ada dan tidak di-takedown
     story = db.query(Story).filter(Story.id == story_id).first()
     if not story:
+        raise HTTPException(status_code=404, detail="Novel tidak ditemukan")
+
+    # Blokir akses chapter jika novel sudah di-takedown
+    if story.status == "archived":
         raise HTTPException(status_code=404, detail="Novel tidak ditemukan")
 
     # Ambil semua chapter dari cerita ini

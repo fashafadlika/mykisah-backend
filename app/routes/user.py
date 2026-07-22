@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.user import UserUpdate
+from app.schemas.user import UserUpdate, ChangePasswordRequest
+from app.routes.auth import pwd_context
 import os
 import uuid
 
@@ -110,4 +111,24 @@ def get_user_by_id(user_id: int, db: Session = Depends(get_db)):
         "username": user.username,
         "email": user.email,
     }
+
+@router.post("/users/me/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Verify old password
+    if not pwd_context.verify(data.old_password, current_user.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password lama salah!"
+        )
+
+    # Hash new password and update
+    hashed_password = pwd_context.hash(data.new_password)
+    current_user.password = hashed_password
+    db.commit()
+    
+    return {"success": True, "message": "Password berhasil diubah."}
 

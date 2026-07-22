@@ -33,6 +33,14 @@ class VerifyOTPSchema(BaseModel):
 class ResendOTPSchema(BaseModel):
     email: EmailStr
 
+class ForgotPasswordSchema(BaseModel):
+    email: EmailStr
+
+class ResetPasswordSchema(BaseModel):
+    email: EmailStr
+    otp_code: str
+    new_password: str
+
 class UserLoginSchema(BaseModel):
     email: EmailStr
     password: str
@@ -246,4 +254,105 @@ def login_user(data: UserLoginSchema, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "user_id": user.id,
         "role": user.role.value,
+    }
+
+
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(
+    data: ForgotPasswordSchema, 
+    background_tasks: BackgroundTasks, 
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Email tidak terdaftar!"
+        )
+
+    otp_code = str(random.randint(100000, 999999))
+    user.otp_code = otp_code
+    user.otp_expired_at = datetime.now() + timedelta(minutes=5)
+
+    try:
+        db.commit()
+        background_tasks.add_task(send_otp_email, user.email, otp_code, True)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gagal mengirim OTP."
+        )
+
+    return {
+        "success": True,
+        "message": "Kode OTP untuk reset password telah dikirim ke email Anda."
+    }
+
+
+@router.post("/verify-reset-otp", status_code=status.HTTP_200_OK)
+def verify_reset_otp(data: VerifyOTPSchema, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pengguna tidak ditemukan!"
+        )
+
+    if user.otp_code != data.otp_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP salah!"
+        )
+
+    if user.otp_expired_at and user.otp_expired_at < datetime.now():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP sudah kedaluwarsa! Silakan minta kode baru."
+        )
+
+    return {
+        "success": True,
+        "message": "OTP valid. Silakan buat password baru."
+    }
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(data: ResetPasswordSchema, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pengguna tidak ditemukan!"
+        )
+
+    if user.otp_code != data.otp_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP salah atau sudah digunakan!"
+        )
+
+    if user.otp_expired_at and user.otp_expired_at < datetime.now():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Kode OTP sudah kedaluwarsa!"
+        )
+
+    hashed_password = pwd_context.hash(data.new_password)
+    user.password = hashed_password
+    user.otp_code = None
+    user.otp_expired_at = None
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Gagal mereset password."
+        )
+
+    return {
+        "success": True,
+        "message": "Password berhasil diubah! Silakan login dengan password baru."
     }

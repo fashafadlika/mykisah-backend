@@ -6,6 +6,7 @@ class ChapterBase(BaseModel):
     title: str
     content: str
     chapter_number: int
+    cover_url: Optional[str] = None
 
 class ChapterCreate(ChapterBase):
     story_id: int

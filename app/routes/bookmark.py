@@ -38,6 +38,9 @@ def add_bookmark(bookmark: BookmarkCreate, db: Session = Depends(get_db)):
     db.add(db_bookmark)
     db.commit()
     db.refresh(db_bookmark)
+
+    # Memuat relasi story agar sesuai dengan schema respon
+    db_bookmark = db.query(Bookmark).options(joinedload(Bookmark.story)).filter(Bookmark.id == db_bookmark.id).first()
     return db_bookmark
 
 

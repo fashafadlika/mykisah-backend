@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.story import Story, Chapter
 from app.models.user import User
+from app.models.bookmark import Bookmark
+from app.models.notification import Notification
 from app.dependencies import get_current_user
 from app.schemas.submission import ChapterCreate, ChapterUpdate, ChapterResponse
 
@@ -115,6 +117,19 @@ def add_chapter(
         db.add(new_chapter)
         db.commit()
         db.refresh(new_chapter)
+        
+        # Kirim notifikasi ke semua user yang bookmark novel ini
+        bookmarks = db.query(Bookmark).filter(Bookmark.story_id == story_id).all()
+        for bookmark in bookmarks:
+            notif = Notification(
+                user_id=bookmark.user_id,
+                story_id=story_id,
+                chapter_id=new_chapter.id,
+                type="new_chapter",
+                message=f"Novel '{story.title}' yang kamu bookmark baru saja merilis bab baru: {payload.title}. Baca sekarang!"
+            )
+            db.add(notif)
+        db.commit()
     except Exception as e:
         db.rollback()
         raise HTTPException(

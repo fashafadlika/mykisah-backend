@@ -14,14 +14,23 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 SENDER_EMAIL = "auth.mykisah@gmail.com" 
 SENDER_PASSWORD = "hdya voyv yrag hpjz" # 16 digit huruf acak tanpa spasi
 
-def send_otp_email(recipient_email: str, otp_code: str):
+def send_otp_email(recipient_email: str, otp_code: str, is_forgot_password: bool = False):
     msg = EmailMessage()
-    msg['Subject'] = "Kode OTP Verifikasi Akun Anda"
-    msg['From'] = SENDER_EMAIL
-    msg['To'] = recipient_email
     
-    # Isi pesan email
-    msg.set_content(f"""
+    if is_forgot_password:
+        msg['Subject'] = "Kode OTP Reset Password Anda"
+        content = f"""
+    Halo,
+    
+    Kami menerima permintaan untuk mereset password Anda. Berikut adalah kode OTP untuk melanjutkan:
+    
+    {otp_code}
+    
+    Kode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun! Jika Anda tidak meminta reset password, abaikan email ini.
+    """
+    else:
+        msg['Subject'] = "Kode OTP Verifikasi Akun Anda"
+        content = f"""
     Halo,
     
     Terima kasih telah mendaftar. Berikut adalah kode OTP verifikasi Anda:
@@ -29,7 +38,13 @@ def send_otp_email(recipient_email: str, otp_code: str):
     {otp_code}
     
     Kode ini hanya berlaku selama 5 menit. Jangan berikan kode ini kepada siapapun!
-    """)
+    """
+
+    msg['From'] = SENDER_EMAIL
+    msg['To'] = recipient_email
+    
+    # Isi pesan email
+    msg.set_content(content)
 
     # Proses mengirim email (menggunakan server SMTP Gmail)
     try:
